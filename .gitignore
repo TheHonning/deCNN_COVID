@@ -1,3 +1,7 @@
+# Path to data
+data/**
+# Path to preprocessed data
+imgs/**
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
