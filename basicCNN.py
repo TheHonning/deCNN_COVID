@@ -1,6 +1,7 @@
 import pathlib
 
 import tensorflow as tf
+import numpy as np
 
 from tensorflow import keras
 from keras.models import Sequential
@@ -9,6 +10,7 @@ from keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, EarlyStopping
 from keras import optimizers
 import matplotlib.pyplot as plt
 import pandas as pd
+from backprop import DeconvNet
 
 
 def preprocess(seed:int=69420) -> tuple[pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path, pathlib.Path]:
@@ -36,7 +38,7 @@ def data_generator(data_source,img_height:int, img_width:int, batch_size:int=32,
         validation_split=None,
         subset=None,
         seed=seed,
-        color_mode='grayscale',
+        color_mode="grayscale",
         image_size=(img_height, img_width),
         batch_size=batch_size,
         crop_to_aspect_ratio=True,
@@ -54,18 +56,17 @@ class SarsCovCNN(tf.keras.Model):
     def __init__(self, img_height:int = 300, img_width:int = 300) -> None:
         super(SarsCovCNN, self).__init__()
 
-        kernel_sizes = [3 * 3, 6 * 6, 9 * 9]
 
         self.R1 = Rescaling(1./255, input_shape=(img_height, img_width, 1))
-        self.C1 = Conv2D(16, kernel_sizes[0], padding='same', activation="relu")
+        self.C1 = Conv2D(16, 3, padding='same', activation="relu")
         self.P1 = MaxPooling2D()
-        self.C2 = Conv2D(32, kernel_sizes[1], padding='same', activation="relu")
+        self.C2 = Conv2D(32, 3, padding='same', activation="relu")
         self.P2 = MaxPooling2D()
-        self.C3 = Conv2D(32, kernel_sizes[2], padding="same", activation="relu")
+        self.C3 = Conv2D(32, 3, padding="same", activation="relu")
         self.P3 = MaxPooling2D()
         self.F1 = Flatten()
         self.D1 = Dense(128, activation="relu")
-        self.D2 = Dense(2, activation="softmax")
+        self.D2 = Dense(2, activation="softmax", name="predictions")
     
     @tf.function
     def call(self, x) -> tf.Tensor:
@@ -118,4 +119,25 @@ cnn.compile(optimizer='adam',
             metrics=['accuracy'])
 
 history = cnn.fit(train_ds, batch_size=batch_size, epochs=num_epochs, verbose=1, validation_data=val_ds)
-plot_data(history)
+#plot_data(history)
+
+# image = tf.keras.utils.load_img(r"C:\Users\henni\Documents\GitHub\deCNN_COVID\Imgs\val\COVID\Covid (3).png", color_mode="grayscale")
+# input_arr = tf.keras.utils.img_to_array(image)
+# input_arr = np.array([input_arr])  # Convert single image to a batch.
+
+for image_batch, labels_batch in val_ds:
+  X_test = image_batch.numpy()
+  y_test = labels_batch.numpy()
+  break
+
+preds = cnn.predict(X_test)
+masking = np.zeros(preds.shape)
+masking[0, np.argmax(preds)] = 1.
+
+deconv = DeconvNet(model=cnn, 
+                   layer_name="predictions",
+                   input_data=X_test,
+                   masking=masking)
+
+heatmap  = deconv.compute()
+plt.imshow(heatmap[0], cmap='gray'); plt.axis('off'); plt.show()
